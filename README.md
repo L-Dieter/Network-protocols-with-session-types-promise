@@ -61,7 +61,7 @@ Option 2: <PATH> npm run test1
 Option 1: <PATH> npx tsx server.ts ./testsuite/test2.ts test2
 ```
 ```
-Option 2: \<PATH> npm run test2
+Option 2: <PATH> npm run test2
 ```
 
 This will open a connection to the server with a session, program and port which is given by the respective file.<br/>
