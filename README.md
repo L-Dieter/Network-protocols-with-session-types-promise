@@ -50,7 +50,7 @@ As soon as an input is required, the client receives a request from the server w
 
 ***Test 1***:
 ```
-Option 1: <PATH> npx tsx server.ts ./testsuite/test1.ts test1
+Option 1: <PATH> npx tsx server.ts ./src/testsuite/test1.ts test1
 ```
 ```
 Option 2: <PATH> npm run test1
@@ -58,7 +58,7 @@ Option 2: <PATH> npm run test1
 
 ***Test 2***:
 ```
-Option 1: <PATH> npx tsx server.ts ./testsuite/test2.ts test2
+Option 1: <PATH> npx tsx server.ts ./src/testsuite/test2.ts test2
 ```
 ```
 Option 2: <PATH> npm run test2
