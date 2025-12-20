@@ -1,170 +1,83 @@
 import { WebSocket, WebSocketServer } from "ws";
-import { Program, Session } from "../../protocol";
-import { buildRequest } from "../misc/buildMsg";
-import { generateId } from "../misc/generateId";
+import { Session } from "../../protocol";
 import { Config } from "../../input";
 import { Marker } from "../interfaces/marker";
-import { doSteps } from "../program/continueProgram";
-import { processServerMessage } from "../events/messageServer";
+import { Channel } from "./channel";
+import { updateSession } from "../update/updateSession";
 
-export class Server {
-    private wss: WebSocketServer | null = null;
 
-    private port: number;
-    private session: Session;
-    private program: Program;
+// create a new server
+export class Server extends Channel {
 
-    private markerDb: Marker[];
+    // the server to initialize
+    server: WebSocketServer | null = null;
+    // the client that connects to the server
+    client: WebSocket | null = null;
+    // the session given by the config
+    session: Session;
 
-    private pendingRequests: Map<number, (response: string) => void>;
-
+    // receive a config with more information about the session
+    // and start a new server
     constructor (config: Config) {
-        this.port = config.port;
+
+        super();
+
         this.session = config.session;
-        this.program = config.program;
+        
+        this.server = new WebSocketServer({port: config.port});
 
-        this.pendingRequests = new Map();
-
-        this.markerDb = [];
+        this.initListeners(config.port);
+        this.initSession();
     }
 
-    start = (): Promise<void> => {
-        return new Promise((resolve, reject) => {
-            this.wss = new WebSocketServer({port: this.port});
+    // initialize the listeners needed for a proper connection
+    private initListeners(port: number) : void {
 
-            this.wss.on('listening', () => {
-                console.log(`Listening at ${this.port}...`);
-                resolve();
-            });
+        // check if a server exists
+        if (!this.server) {
+            throw new Error("No server found");
+        }
 
-            this.wss.on('error', (e) => {
-                console.error();
-                reject(e);
-            });
+        // get a notification when the server is ready
+        this.server.on('listening', () => {
+            console.log(`Listening at ${port}...`);
+        });
 
-            this.wss.on('close', () => {
-                console.log("Connection closed");
-            });
-        })
-    }
+        // throw an error is something went wrong
+        this.server.on('error', (e) => {
+            console.error(e);
+        });
 
-    handleConnection = (): Promise<void> => {
-        return new Promise((resolve, reject) => {
+        // get a notification if the connection gets closed
+        this.server.on('close', () => {
+            console.log("Connection closed");
+        });
 
-            if (!this.wss) {
-                throw new Error("No server found");
-            }
+        // check for connecting clients
+        this.server.on('connection', (ws: WebSocket) => {
 
-            this.wss.on('connection', async (ws: WebSocket) => {
+            this.client = ws;
 
-                if (!this.wss) {
-                    throw new Error("No server found");
-                }
-
-                const client: any = ws;
-
-                // do the steps and update the session, program and markerDb
-                const state: [Session, Program, Marker[]] = doSteps(this.session, this.program, this.wss, client, this.markerDb);
-                this.session = state[0];
-                this.program = state[1];
-                this.markerDb = state[2];
-
-                this.handleMessage(ws);
-
-                // send a request to the client
-                try {
-                    await this.request(client, this.session).catch();                   
-                } catch (error) {
-                    console.error("Failed sending a request: ", error);
-                    reject(error);
-                }
-
-                // short information if the client disconnects from the server
-                ws.on('close', () => {
-                    console.log('Client disconnected');
-                });
-
-                resolve();
-
+            // store the incoming messages in the input array
+            this.client.on('message', (message: any) => {
+                this.messages.push(JSON.parse(message));
             })
 
-        })
+            // short information if the client disconnects from the server
+            this.client.on('close', () => {
+                console.log('Client disconnected');
+            });
+        });
     }
 
-    handleMessage = (ws: WebSocket): void => {
-        ws.on('message', async (message: any) => {
+    // first check if the session starts with a definition and if so
+    // immediately go to the next step
+    private initSession(): void {
 
-            const msg: Record<string, any> = JSON.parse(message);
-
-            const client: any = ws;
-
-            // id#response
-            const requestId: number = msg.id;
-            const data: string = msg.message;
-
-            if (this.pendingRequests.has(requestId)) {
-                const response = this.pendingRequests.get(requestId);
-                if (response) {
-                    response(JSON.stringify(msg));
-                }
-                this.pendingRequests.delete(requestId);
-            }
-            else {
-                ws.send("No pending request with the id: " + requestId);
-                return;
-            }
-
-            if (!this.wss) {
-                throw new Error("No server found");
-            }
-
-            // process the incoming message of the client
-            const [session, program] = processServerMessage(client, this.session, this.program, this.markerDb, data, this.wss);
-            this.session = session;
-            this.program = program;
-
-            // continue with the next steps
-            const state: [Session, Program, Marker[]] = doSteps(this.session, this.program, this.wss, client, this.markerDb);
-            this.session = state[0];
-            this.program = state[1];
-            this.markerDb = state[2];
-
-            try {
-                await this.request(client, this.session);
-            } catch (error) {
-                console.error("Failed sending a request: ", error);
-            }
-        })
+        if (this.session.kind === "def") {
+            const update: [Session, Marker[]] = updateSession(this.session, this.markerDb);
+            this.session = update[0];
+            this.markerDb = update[1];
+        }
     }
-
-    request = (client: WebSocket, session: Session): Promise<string> => {
-        // id#type
-        const requestId: number = generateId(this.pendingRequests);
-
-        return new Promise((resolve, reject) => {
-
-            // save the id and a function to call if there is a response
-            this.pendingRequests.set(requestId, resolve);
-
-            // try to send a request
-            try {
-                client.send(buildRequest(requestId, session));
-            } catch (error) {
-                reject(`Failed to send the request`);
-            }
-
-            // timeout if there is no response after 60s
-            setTimeout(() => {
-                if (!this.wss) { throw new Error("No server found"); }
-                if (this.pendingRequests.has(requestId)) {
-                    reject("No response by the client");
-                    this.pendingRequests.delete(requestId);
-                    client.close();
-                    this.wss.close();
-                }
-            }, 60000);
-
-        })
-    }
-
 }
