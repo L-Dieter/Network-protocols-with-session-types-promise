@@ -1,7 +1,7 @@
 # Network-protocols-with-session-types-p
 
 
-# <br/><p align="center">------ DEPRECATED README------</p><br/>
+# <br/><p align="center">------ DEPRECATED README ------</p><br/>
 
 **Start by installing the dependencies**
 
