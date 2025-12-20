@@ -1,4 +1,4 @@
-# Network-protocols-with-session-types-p
+# Network-protocols-with-session-types-promise
 
 
 # <br/><p align="center">------ DEPRECATED README ------</p><br/>
