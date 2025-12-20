@@ -1,5 +1,8 @@
 # Network-protocols-with-session-types-p
 
+
+# <br/><p align="center">------ DEPRECATED ------</p><br/>
+
 **Start by installing the dependencies**
 
 ```
