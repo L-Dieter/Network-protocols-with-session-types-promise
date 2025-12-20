@@ -1,88 +1,74 @@
 import { WebSocket } from "ws";
-import * as readline from 'readline';
-import { processClientMessage } from "../events/messageClient";
+import { Channel } from "./channel";
+import { Session } from "../../protocol";
+import { Config } from "../../input";
+import { Marker } from "../interfaces/marker";
+import { updateSession } from "../update/updateSession";
 
-export class Client {
-    private socket: WebSocket | null = null;
-    private url: string;
-    private rl: readline.Interface;
+// create a new client
+export class Client extends Channel {
 
-    constructor (url: string) {
-        this.url = url;
+    // set server to null because we only want to initialze a client
+    server = null;
+    // the client we initialize in the constructor
+    client: WebSocket | null = null;
+    // the session given by the config
+    session: Session;
 
-        // Set up a readline interface to be able to answer a request from the server
-        this.rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout
+    // the uri we need to connect to the server
+    private uri: string;
+
+    constructor (config: Config) {
+        super();
+
+        this.session = config.session;
+        
+        this.uri = "ws://localhost:" + config.port;
+
+        // open a connection with a server
+        this.client = new WebSocket(this.uri);
+
+        this.initListeners(this.uri);
+        this.initSession();
+    }
+
+    // initialize all needed listeners
+    private initListeners(uri: string) : void {
+
+        // check if the client exists
+        if (!this.client) {
+            throw new Error("No client found");
+        }
+
+        // get a notification when the client connects to the server
+        this.client.on('open', () => {
+            console.log(`[Connected to server with url: ${uri}]`);
+        })
+
+        // throws an error
+        this.client.on('error', (e) => {
+            console.error("Connection error: ", e);
+        })
+
+        // close the connection
+        this.client.on('close', () => {
+            console.log('Disconnected from WebSocket server');
+        })
+
+        // check for incoming messages, push them to the array and print them to the console
+        this.client.on('message', (data: any) => {
+            this.messages.push(data);
+            console.log(JSON.parse(data));
         })
     }
 
-    // start a connection to the server
-    connect = (): Promise<void> => {
-        return new Promise((resolve, reject) => {
-            // open a connection with a server
-            this.socket = new WebSocket(this.url);
-
-            // get a notification when the client connects to the server
-            this.socket.on('open', () => {
-                console.log(`[Connected to server with url: ${this.url}]`);
-                resolve();
-            })
-
-            // throws an error
-            this.socket.on('error', (e) => {
-                console.error("Connection error: ", e);
-                reject(e);
-
-            })
-
-            // close the connection
-            this.socket.on('close', () => {
-                console.log('Disconnected from WebSocket server');
-                this.rl.close();
-            })
-
-        });
-    }
-
-    // sends a message to the server
-    sendMessage = (response: string): Promise<void> => {
-        return new Promise((resolve) => {
-
-            if (!this.socket) {
-                throw new Error("Client is not connected");
-            }
-    
-            this.socket.send(response);
-
-            resolve();
-        });
-    }
-
-    // handles incoming messages from the server
-    handleMessage = (): void => {
-        if (!this.socket) {
-            throw new Error("Client is not connected");
+    // first check if the session starts with a definition and if so
+    // immediately go to the next step
+    private initSession(): void {
+        if (this.session.kind === "def") {
+            const update: [Session, Marker[]] = updateSession(this.session, this.markerDb);
+            this.session = update[0];
+            this.markerDb = update[1];
         }
-        
-        this.socket.on('message', async (data: any) => {
-
-            const response: string = await processClientMessage(data, this.rl);
-            
-            if (response) {
-                this.sendMessage(response);
-            }
-    
-        });
-
     }
-
-    closeConnection = (): void => {
-        if (!this.socket) {
-            throw new Error("Client is not connected");
-        }
-
-        this.socket.close();
-    }
-
 }
