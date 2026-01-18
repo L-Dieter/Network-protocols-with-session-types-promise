@@ -1,6 +1,6 @@
-import { Config, mkConfig } from "../../input";
-import { Session } from "../../protocol";
-import { Client } from "../classes/clientBase";
+import { Config, mkConfig } from "../../../input";
+import { Session } from "../../../protocol";
+import { Client } from "../../classes/clientBase";
 
 
 
