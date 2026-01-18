@@ -1,7 +1,7 @@
-import { Config, mkConfig } from "../../input";
-import { Session } from "../../protocol";
-import { Choice } from "../classes/choice";
-import { Server } from "../classes/serverBase";
+import { Config, mkConfig } from "../../../input";
+import { Session } from "../../../protocol";
+import { Choice } from "../../classes/choice";
+import { Server } from "../../classes/serverBase";
 
 
 const session: Session =
@@ -53,8 +53,10 @@ export class ArithServer extends Server {
         let r: boolean;
 		do {
 			r = await this.choice([  // async method inherited from Server
-                  new Choice("Add", this.doAdd)
-                , new Choice("Neg", this.doNeg)
+                //   new Choice("Add", this.doAdd)
+                // , new Choice("Neg", this.doNeg)
+                  new Choice("Add", this.doAdd.bind(this))
+                , new Choice("Neg", this.doNeg.bind(this))
 				, new Choice("Quit", this.doQuit)]);
 	    } while (r);
 		await this.close();
