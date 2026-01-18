@@ -34,20 +34,3 @@ export type Session =
 | { kind: "ref"; name: string }
     /** terminate protocol */
 | { kind: "end" }
-
-export type Program = 
-      { command: "send",
-        get_value: () => any,
-        type ?: Type,
-        cont: Program }
-    | { command: "recv",
-        put_value: (v: any) => void,
-        type ?: Type,
-        cont: Program }
-    | { command: "select",
-        get_value: () => Label,
-        cont: Program }
-    | { command: "choose",
-        do_match: (label: Label) => void,
-        alt_cont: Record<Label, Program> }
-    | { command: "end" }
