@@ -8,10 +8,8 @@ import { updateSession } from "../update/updateSession";
 // create a new client
 export class Client extends Channel {
 
-    // set server to null because we only want to initialze a client
-    server = null;
     // the client we initialize in the constructor
-    client: WebSocket | null = null;
+    socket: WebSocket;
     // the session given by the config
     session: Session;
 
@@ -26,39 +24,37 @@ export class Client extends Channel {
         this.uri = "ws://localhost:" + config.port;
 
         // open a connection with a server
-        this.client = new WebSocket(this.uri);
+        this.socket = new WebSocket(this.uri);
 
-        this.initListeners(this.uri);
-        this.initSession();
     }
+
 
     // initialize all needed listeners
     private initListeners(uri: string) : void {
 
         // check if the client exists
-        if (!this.client) {
+        if (!this.socket) {
             throw new Error("No client found");
         }
 
         // get a notification when the client connects to the server
-        this.client.on('open', () => {
+        this.socket.on('open', () => {
             console.log(`[Connected to server with url: ${uri}]`);
         })
 
         // throws an error
-        this.client.on('error', (e) => {
+        this.socket.on('error', (e) => {
             console.error("Connection error: ", e);
         })
 
         // close the connection
-        this.client.on('close', () => {
+        this.socket.on('close', () => {
             console.log('Disconnected from WebSocket server');
         })
 
         // check for incoming messages, push them to the array and print them to the console
-        this.client.on('message', (data: any) => {
+        this.socket.on('message', (data: any) => {
             this.messages.push(data);
-            console.log(JSON.parse(data));
         })
     }
 
@@ -71,4 +67,21 @@ export class Client extends Channel {
             this.markerDb = update[1];
         }
     }
+
+    // checks if the server is ready to connect
+    public waitForConnection() : Promise<void> {
+        return new Promise((resolve) => {
+            if (this.socket.readyState !== 1) {
+                setTimeout(() => {
+                    resolve(this.waitForConnection());
+                }, 200);
+            }
+            else {
+                this.initListeners(this.uri);
+                this.initSession();
+                resolve();
+            }
+        });
+    }
+
 }
