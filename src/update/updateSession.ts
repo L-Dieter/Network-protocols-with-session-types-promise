@@ -13,7 +13,7 @@ export function updateSession (session: Session, marker: Marker[], label?: strin
         session = session.alternatives[label];
     }
     else if (session.kind === "def") {
-        setMarker(session.name, marker, { command: "end" }, session);
+        setMarker(session.name, marker, session);
         session = session.cont;
     }
     else if (session.kind === "ref") {
@@ -23,7 +23,7 @@ export function updateSession (session: Session, marker: Marker[], label?: strin
     // if a def or ref is called continue updating the session  
     while (session.kind === "def" || session.kind === "ref") {
         if (session.kind === "def") {
-            setMarker(session.name, marker, { command: "end" }, session);
+            setMarker(session.name, marker, session);
             session = session.cont;
         }
         else if (session.kind === "ref") {
