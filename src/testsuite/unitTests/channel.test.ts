@@ -2,7 +2,6 @@ import assert from "assert";
 import { Channel } from "../../classes/channel";
 import WebSocket, { WebSocketServer } from "ws";
 import { Session } from "../../../protocol";
-import { Choice } from "../../classes/choice";
 
 
 
@@ -154,7 +153,7 @@ describe("Channel", function () {
         // case tuple
         it("should return *['test', true, 1, 2, 3]*, type: tuple", async function () {
             channel.messages.push(JSON.stringify(["test", true, 1, 2, 3]));
-            recvTest.payload = { type: "tuple", payload: [{ type: "number" }, { type: "string" }, { type: "bool" }] };
+            recvTest.payload = { type: "tuple", payload: [{ type: "string" }, { type: "bool" }, { type: "number" }, { type: "number" }, { type: "number" }] };
             channel.session = recvTest;
             const r: string = await channel.receive();
             assert.deepEqual(r, ["test", true, 1, 2, 3]);
@@ -170,8 +169,10 @@ describe("Channel", function () {
     })
     describe("#send()", function () {
         it("should send *'toServer'*, client -> server", async function () {
+            sendTest.payload = { type: "string" };
             client.session = sendTest;
             client.send("toServer");
+            recvTest.payload = { type: "string" };
             server.session = recvTest;
             const r: any = await server.receive();
             assert.strictEqual(r, "toServer");
@@ -205,7 +206,7 @@ describe("Channel", function () {
             channel.messages.push(JSON.stringify("Test"));
             chooseTest.alternatives["Test"] = { kind: "end" };
             channel.session = chooseTest;
-            const r: any = await channel.choice([new Choice("Test", () => { return 42 })]);
+            const r: any = await channel.choice({"Test": () => { return 42 }});
             assert.strictEqual(r, 42);
         })
     })
