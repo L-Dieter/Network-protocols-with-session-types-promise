@@ -1,19 +1,17 @@
 import { WebSocket } from "ws";
 import { Label, Session } from "../../protocol";
 import { Marker } from "../interfaces/marker";
-import { Choice } from "./choice";
 import { updateSession } from "../update/updateSession";
 import { checkPayload } from "../check/checkPayload";
 
 // create a new channel for a server or client
-// export abstract class Channel {
 export abstract class Channel {
 
     // connection values
-    abstract socket: WebSocket | null;
+    public socket: WebSocket | null = null;
 
     // the session to work with on a server
-    abstract session: Session;
+    public session: Session = { kind: "end" };
 
     // input array (collects the incoming messages)
     public messages: string[] = new Array<string>;
@@ -55,14 +53,14 @@ export abstract class Channel {
     }
 
     // try to match the first string of the input array with a tag of the choices
-	async choice<T>(chs : Array<Choice<T>>) : Promise<T> {
+	async choice<T>(chs : Record<string, () => T>) : Promise<T> {
 
         // throw an exception if the session type does not fit the method
         if (this.session.kind !== "choice" || this.session.dir !== "recv") {
             throw new Error(`Invalid method **CHOICE** for the given session type`);
         }
         
-        return await this.waitForLabel(chs).catch((e) => console.error("Error thrown at .choice(): ", e));
+        return await this.waitForMessage(chs).catch((e) => console.error("Error thrown at .choice(): ", e));
 
     }
 
@@ -74,7 +72,12 @@ export abstract class Channel {
             throw new Error(`Invalid method **SELECT** for the given session type`);
         }
 
-        this.next(tag);
+        // check if the tag exists in the session
+        try {
+            this.next(tag);
+        } catch (error) {
+            throw new Error("Not a valid tag");
+        }
 
         this.socket?.send(JSON.stringify(tag));
 
@@ -91,6 +94,21 @@ export abstract class Channel {
         this.socket?.close();
     }
 
+    // first check if the session starts with a definition and if so
+    // immediately go to the next step
+    public initSession(): void {
+
+        if (this.session.kind === "def") {
+            const update: [Session, Marker[]] = updateSession(this.session, this.markerDb);
+            this.session = update[0];
+            this.markerDb = update[1];
+        }
+
+        console.log("--- Session initialized ---");
+    }
+
+
+
     // update the session and the markers if needed
     private next(label?: Label) : void {
         const update: [Session, Marker[]] = updateSession(this.session, this.markerDb, label);
@@ -98,74 +116,49 @@ export abstract class Channel {
         this.markerDb = update[1];
     }
 
-
     // check the stack of messages and wait until one arrives if needed
-    private waitForMessage() : Promise<any> {
-        return new Promise ((resolve, reject) => {
+    private waitForMessage<T>(chs: Record<string, () => T> = {}) : Promise<any> {
+        return new Promise (async (resolve, reject) => {
             if (this.messages.length === 0) {
                 setTimeout(() => {
-                    resolve(this.waitForMessage());
+                    resolve(this.waitForMessage(chs));
                 }, 100);
             }
             else {
                 const recv: any = this.messages.shift();
-                this.next();
-                
+                let msg: any;
                 
                 // check if the message can be transformed from JSON
                 try {
-                    const msg: any = JSON.parse(recv);
-					
-                    // check if the message is of the correct type
-                    if (this.session.kind === "single") {
-                        if (!checkPayload(msg, this.session.payload)) {
-                            reject(`Payload is not of { type: ${this.session.payload.type} }`);
-                        }
+                    msg = JSON.parse(recv);
+                } catch (error) {
+                    throw new Error("Not a valid JSON");
+                }
+
+                // check if the message is of the correct type
+                if (this.session.kind === "single") {
+                    if (!checkPayload(msg, this.session.payload)) {
+                        reject(`Payload is not of { type: ${this.session.payload.type} }`);
                     }
+
+                    this.next();
                     resolve(msg);
-                } catch (error) {
-                    throw new Error("Not a valid JSON");
                 }
-
-            }
-        });
-    }
-
-    // check the stack of messages if a label for a given choice is available otherwise wait for one
-    private waitForLabel<T>(chs: Array<Choice<T>>) : Promise<any> {
-        return new Promise((resolve, reject) => {
-            if (this.messages.length === 0) {
-                setTimeout(() => {
-                    resolve(this.waitForLabel(chs));
-                }, 100);
-            }
-            else {
-                const recv: any = this.messages.shift();
-                let label: any;
-
-                try {
-                    label = JSON.parse(recv);
-                    if (this.session.kind === "choice") {
-                        if (!checkPayload(label, { type: "string" })) {
-                            reject("Payload is not of { type: string }");
-                        }
+                else if (this.session.kind === "choice") {
+                    if (!checkPayload(msg, { type: "string" })) {
+                        reject("Payload is not of { type: string }");
                     }
-                    
-                } catch (error) {
-                    throw new Error("Not a valid JSON");
-                }
-                this.next(label);
-    
-                // check if a given tag by the input array matches a tag in the choice array
-                for (var ch of chs) {
-                    if (ch.tag === label) {
-                        resolve(ch.callback());
+
+                    // check if the tag exists in the choice object
+                    if (chs.hasOwnProperty(msg)) {
+                        this.next(msg);
+                        resolve(chs[msg]());
+                    }
+                    else {
+                        // throw an exception if there is no match
+                        throw new Error("No match in CHOICE found!");
                     }
                 }
-    
-                // throw an exception if there is no match
-                throw new Error("No match in CHOICE found!");
-    
             }
         });
     }
