@@ -97,7 +97,7 @@ export abstract class Channel {
     // first check if the session starts with a definition and if so
     // immediately go to the next step
     public initSession(): void {
-
+	
         if (this.session.kind === "def") {
             const update: [Session, Marker[]] = updateSession(this.session, this.markerDb);
             this.session = update[0];
