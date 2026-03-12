@@ -3,6 +3,7 @@ import { Session } from "../../protocol";
 import { Config } from "../../input";
 import { Server } from "./serverBase";
 
+// open a new WebSocketServer connection
 export class ServerConnection {
 
     // the server to initialize
@@ -11,12 +12,12 @@ export class ServerConnection {
     private port: number;
     // the session to define the protocol on this server
     private session: Session;
-    // the function to initialize a new channel for a client
-    private channel: typeof Server;
+    // the function to initialize a new server-side channel for a client
+    private channel: new (...args: ConstructorParameters<typeof Server>) => Server;
 
     // receive a config with more information about the session
     // and start a new server
-    constructor(config: Config, channelType: typeof Server) {
+    constructor(config: Config, channelType: new (...args: ConstructorParameters<typeof Server>) => Server) {
 
         this.port = config.port;
         this.session = config.session;
@@ -52,12 +53,8 @@ export class ServerConnection {
             // create a new channel for each client connecting to the server
             const channel: Server = new this.channel(this.session, ws);
             const r: any = await channel.start();
-            console.log("RETURN: " + r);
 
         });
 
-        console.log("--- Listeners initialized ---");
-
     }
-
 }
