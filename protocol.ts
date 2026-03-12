@@ -1,3 +1,9 @@
+/**
+ * @fileoverview Session Types in TypeScript
+ * @author Prof. Dr. Peter Thiemann
+ * @since 07.03.2024
+ */
+
 /** concrete types for protocols */
 /** payload types modeled after JSON */
 export type Type =
