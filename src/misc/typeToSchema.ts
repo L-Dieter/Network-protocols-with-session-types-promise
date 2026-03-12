@@ -22,13 +22,39 @@ export function generateSchema (type: Type): JSON {
         schemaString = schemaString.replace(/record\",\"payload/g, "object\",\"additionalProperties\": false,\"properties");
 
         // add "required" to the object
-        const recordProperties: string[] = schemaString.match(/\"properties.+?\}\}/g) || [];
+        const recordProperties: string[] = schemaString.match(/\"properties.+?\}{2,}/g) || [];
         for (var rec of recordProperties) {
 
-            let recStr: string = rec.replace(/(.*)/, "{$1}");
-            const recObj: Record<string, object> = JSON.parse(recStr);
-            schemaString = schemaString.replace(rec, `\"required\":${JSON.stringify(Object.keys(recObj.properties))},${rec}`);
+            let propertiesCount: number = rec.match(/properties/g)?.length || 0;
+            
+            let recStr: string = rec.replace(/(.*)/, `{$1`);
 
+            const openBrackets: number = recStr.match(/\{/g)?.length || 0;
+            const closedBrackets: number = recStr.match(/\}/g)?.length || 0;
+            if ((openBrackets - closedBrackets) > 0) {
+                recStr = recStr.replace(/(.*)/, `$1${"}".repeat(openBrackets - closedBrackets)}`);
+            }
+
+            let nextRec: string = rec;
+
+            while (propertiesCount !== 0) {
+                propertiesCount--;
+
+                const recObj: Record<string, object> = JSON.parse(recStr);
+                schemaString = schemaString.replace(nextRec, `\"required\":${JSON.stringify(Object.keys(recObj.properties))},${nextRec}`);
+
+                if (propertiesCount !== 0) {
+                    const recordProps: string[] = recStr.match(/,\"properties.+?\}{2,}/g) || [];
+                    nextRec = recordProps[0];
+                    nextRec = nextRec.replace(/./, "");
+                }
+
+                recStr = nextRec.replace(/(.*)/, `{$1}`);
+                const openBrackets: number = recStr.match(/\{/g)?.length || 0;
+                const closedBrackets: number = recStr.match(/\}/g)?.length || 0;
+                const re: RegExp = new RegExp(`.{${closedBrackets - openBrackets}}$`);
+                recStr = recStr.replace(re, "");
+            }
         }
 
         // rename ref and def types
