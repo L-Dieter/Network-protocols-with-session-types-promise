@@ -20,31 +20,41 @@ export class Client extends Channel {
 
     }
 
-
     // initialize all needed listeners
-    private initListeners() : void {
+    private initListeners(socket: WebSocket) : void {
 
         // get a notification when the client connects to the server
-        this.socket?.on('open', () => {
+        socket.on('open', () => {
             console.log(`[Connected to server with url: ${this.uri}]`);
         })
+        socket.onopen = () => { console.log("TEST"); }
 
         // throws an error
-        this.socket?.on('error', (e) => {
+        socket.on('error', (e) => {
             console.error("Connection error: ", e);
         })
 
         // close the connection
-        this.socket?.on('close', () => {
+        socket.on('close', () => {
             console.log('Disconnected from WebSocket server');
         })
 
-        // check for incoming messages, push them to the array and print them to the console
-        this.socket?.on('message', (data: any) => {
-            this.messages.push(data);
+        // check for incoming messages, push them to the array or resolve the data
+        socket.on('message', (data: any) => {
+            // check if the client is waiting for a message
+            if (!this.resv) {
+                this.messages.push(data);
+            }
+            else {
+                // clear the timer if the message arrives in time
+                if (this.timer) {
+                    clearTimeout(this.timer);
+                }
+                const resolve = this.resv;
+                this.resv = null;
+                resolve(data);
+            }
         })
-
-        console.log("----- CLIENT LISTENERS INIT -----");
     }
 
     // checks if the server is ready to connect
@@ -56,7 +66,7 @@ export class Client extends Channel {
                 }, 200);
             }
             else {
-                this.initListeners();
+                this.initListeners(this.socket);
                 this.initSession();
                 resolve();
             }
