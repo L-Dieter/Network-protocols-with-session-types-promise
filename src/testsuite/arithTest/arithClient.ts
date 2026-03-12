@@ -3,7 +3,7 @@ import { Session } from "../../../protocol";
 import { Client } from "../../classes/clientBase";
 
 
-
+// the session for a arithmetic client
 const session: Session =
     { kind: "def", name: "arith", cont:
         { kind: "choice", dir: "send", alternatives:
@@ -26,37 +26,36 @@ const session: Session =
     };
 
 
-
+// create the config to initialize a client
 const config: Config = mkConfig(session);
 
-
+// a simple arithmetic client
 export class ArithClient extends Client {
-    addNumbers: number[];
-    negNumber: number;
     constructor() {
         super(config);
-
-        this.addNumbers = [4, 8];
-        this.negNumber = 12;
     }
 
-    async add() : Promise<number> {
+    // add two numbers and return the sum
+    async add(numbers: [number, number]) : Promise<number> {
         await this.select("Add");
-        await this.send(this.addNumbers[0]);
-        await this.send(this.addNumbers[1]);
+        await this.send(numbers[0]);
+        await this.send(numbers[1]);
         let sum = await this.receive();
-        await this.select("Quit");
-        await this.close();
         return sum;
     }
 
-    async neg() : Promise<number> {
+    // negate a number and return it
+    async neg(num: number) : Promise<number> {
         await this.select("Neg");
-        await this.send(this.negNumber);
+        await this.send(num);
         let sum = await this.receive();
+        return sum;
+    }
+
+    // close the connection
+    async quit() : Promise<void> {
         await this.select("Quit");
         await this.close();
-        return sum;
     }
 
 }
