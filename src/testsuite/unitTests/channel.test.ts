@@ -57,7 +57,19 @@ class ServerTest extends Channel {
             this.socket = ws;
 
             this.socket.on('message', (msg: any) => {
+                            // check if the server is waiting for a message
+            if (!this.resv) {
                 this.messages.push(msg);
+            }
+            else {
+                // clear the timer if the message arrives in time
+                if (this.timer) {
+                    clearTimeout(this.timer);
+                }
+                const resolve = this.resv;
+                this.resv = null;
+                resolve(msg);
+            }
             });
         });
     }
@@ -80,7 +92,19 @@ class ClientTest extends Channel {
 
     private init () : void {
         this.socket?.on('message', (msg: any) => {
-            this.messages.push(msg);
+                        // check if the server is waiting for a message
+            if (!this.resv) {
+                this.messages.push(msg);
+            }
+            else {
+                // clear the timer if the message arrives in time
+                if (this.timer) {
+                    clearTimeout(this.timer);
+                }
+                const resolve = this.resv;
+                this.resv = null;
+                resolve(msg);
+            }
         })
     }
 }
@@ -171,7 +195,7 @@ describe("Channel", function () {
         it("should send *'toServer'*, client -> server", async function () {
             sendTest.payload = { type: "string" };
             client.session = sendTest;
-            client.send("toServer");
+            await client.send("toServer");
             recvTest.payload = { type: "string" };
             server.session = recvTest;
             const r: any = await server.receive();
@@ -179,7 +203,7 @@ describe("Channel", function () {
         })
         it("should send *'toClient'*, server -> client", async function () {
             server.session = sendTest;
-            server.send("toClient");
+            await server.send("toClient");
             client.session = recvTest;
             const r: any = await client.receive();
             assert.strictEqual(r, "toClient");
