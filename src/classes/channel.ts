@@ -19,15 +19,27 @@ export abstract class Channel {
     // store the references
     public markerDb: Marker[] = [];
 
+    // store the resolve function for messages
+    public resv: ((x: any) => void) | null = null;
+
+    // store the timeout so it can be canceled if needed
+    public timer: any;
+
     // parse and return the first message of the input array
-    async receive() : Promise<any> {
+    async receive(timeout?: {time: number, callback: () => void}) : Promise<any> {
 
         // throw an exception if the session type does not fit the method
         if (this.session.kind !== "single" || this.session.dir !== "recv") {
             throw new Error(`Invalid method **RECEIVE** for the given session type`);
         }
 
-        return await this.waitForMessage().catch((e) => console.error("Error thrown at .receive(): ", e));
+        this.timer = setTimeout(() => {
+            timeout?.callback();
+        }, timeout?.time);
+
+        return await this.waitForMessage()
+            .then(message => this.checkMessage(message))
+            .catch((e) => console.error("Error thrown at .receive(): ", e));
 
     }
 
@@ -49,18 +61,23 @@ export abstract class Channel {
             throw error;
         }
 
-
     }
 
     // try to match the first string of the input array with a tag of the choices
-	async choice<T>(chs : Record<string, () => T>) : Promise<T> {
+	async choice<T>(chs : Record<string, () => T>, timeout?: {time: number, callback: () => void}) : Promise<T> {
 
         // throw an exception if the session type does not fit the method
         if (this.session.kind !== "choice" || this.session.dir !== "recv") {
             throw new Error(`Invalid method **CHOICE** for the given session type`);
         }
-        
-        return await this.waitForMessage(chs).catch((e) => console.error("Error thrown at .choice(): ", e));
+
+        this.timer = setTimeout(() => {
+            timeout?.callback();
+        }, timeout?.time);
+
+        return await this.waitForMessage()
+            .then(message => this.checkMessage(message, chs))
+            .catch((e) => console.error("Error thrown at .choice(): ", e));
 
     }
 
@@ -97,14 +114,13 @@ export abstract class Channel {
     // first check if the session starts with a definition and if so
     // immediately go to the next step
     public initSession(): void {
-	
+
         if (this.session.kind === "def") {
             const update: [Session, Marker[]] = updateSession(this.session, this.markerDb);
             this.session = update[0];
             this.markerDb = update[1];
         }
 
-        console.log("--- Session initialized ---");
     }
 
 
@@ -116,51 +132,59 @@ export abstract class Channel {
         this.markerDb = update[1];
     }
 
-    // check the stack of messages and wait until one arrives if needed
-    private waitForMessage<T>(chs: Record<string, () => T> = {}) : Promise<any> {
-        return new Promise (async (resolve, reject) => {
+    // check the stack of messages and store the resolve function if it is empty
+    private waitForMessage() : Promise<any> {
+        return new Promise ((resolve) => {
             if (this.messages.length === 0) {
-                setTimeout(() => {
-                    resolve(this.waitForMessage(chs));
-                }, 100);
+                this.resv = resolve;
             }
             else {
-                const recv: any = this.messages.shift();
-                let msg: any;
-                
-                // check if the message can be transformed from JSON
-                try {
-                    msg = JSON.parse(recv);
-                } catch (error) {
-                    throw new Error("Not a valid JSON");
+                if (this.timer) {
+                    clearTimeout(this.timer);
                 }
-
-                // check if the message is of the correct type
-                if (this.session.kind === "single") {
-                    if (!checkPayload(msg, this.session.payload)) {
-                        reject(`Payload is not of { type: ${this.session.payload.type} }`);
-                    }
-
-                    this.next();
-                    resolve(msg);
-                }
-                else if (this.session.kind === "choice") {
-                    if (!checkPayload(msg, { type: "string" })) {
-                        reject("Payload is not of { type: string }");
-                    }
-
-                    // check if the tag exists in the choice object
-                    if (chs.hasOwnProperty(msg)) {
-                        this.next(msg);
-                        resolve(chs[msg]());
-                    }
-                    else {
-                        // throw an exception if there is no match
-                        throw new Error("No match in CHOICE found!");
-                    }
-                }
+                resolve(this.messages.shift());
             }
         });
+    }
+
+    // check if a message is of the desired type
+    private checkMessage<T>(recv: any, chs: Record<string, () => T> = {}): any {
+        // the message to check
+        let msg: any;
+
+
+        // check if the message can be transformed from JSON
+        try {
+            msg = JSON.parse(recv);
+        } catch (error) {
+            throw new Error("Not a valid JSON");
+        }
+
+        // check if the message is of the correct type
+        if (this.session.kind === "single") {
+            if (!checkPayload(msg, this.session.payload)) {
+                throw new Error(`Payload is not of { type: ${this.session.payload.type} }`);
+            }
+
+            this.next();
+            return msg;
+        }
+        else if (this.session.kind === "choice") {
+            if (!checkPayload(msg, { type: "string" })) {
+                throw new Error("Payload is not of { type: string }");
+            }
+
+            // check if the tag exists in the choice object
+            if (chs.hasOwnProperty(msg)) {
+                this.next(msg);
+                return chs[msg]();
+            }
+            else {
+                // throw an exception if there is no match
+                throw new Error("No match in CHOICE found!");
+            }
+        }
+
     }
 
 }
